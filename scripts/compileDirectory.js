@@ -2,51 +2,27 @@
  * alt911.com — Offline Directory Compiler Script
  * 
  * This script runs programmatically via Playwright to crawl search results
- * for a list of US cities, extract non-emergency dispatch numbers, and compile
- * them into a clean JSON directory (national_police_directory.json).
+ * for a list of US cities from 'uscities.csv', extract non-emergency dispatch
+ * numbers, and compile them into a clean JSON directory (national_police_directory.json).
  * 
  * Data Source Note:
  *   The city listing data used to run this compilation script is sourced
  *   from SimpleMaps: https://simplemaps.com/data/us-cities
  * 
- * Usage:
- *  1. Create a directory named `scraper` or navigate to this workspace.
- *  2. Install dependencies: npm install playwright
- *  3. Place a CSV list of US cities (e.g., 'uscities.csv' from SimpleMaps) in this folder,
- *     or use the built-in starter list.
- *  4. Run the script: node scripts/compileDirectory.js
+ * How to Run:
+ *  1. Open terminal in the project root folder.
+ *  2. Run: node scripts/compileDirectory.js
  */
 
 const { chromium } = require('playwright');
 const fs = require('fs');
+const readline = require('readline');
 const path = require('path');
 
-// Output file location
+// File paths
+const CSV_FILE = path.join(__dirname, 'uscities.csv');
 const OUTPUT_FILE = path.join(__dirname, 'national_police_directory.json');
-
-// --- Starter List of Cities (if no CSV is provided) ---
-const STARTER_CITIES = [
-  { city: "Madison", state: "WI" },
-  { city: "Milwaukee", state: "WI" },
-  { city: "Green Bay", state: "WI" },
-  { city: "Kenosha", state: "WI" },
-  { city: "Racine", state: "WI" },
-  { city: "Appleton", state: "WI" },
-  { city: "Waukesha", state: "WI" },
-  { city: "Oshkosh", state: "WI" },
-  { city: "Eau Claire", state: "WI" },
-  { city: "Janesville", state: "WI" },
-  { city: "West Allis", state: "WI" },
-  { city: "La Crosse", state: "WI" },
-  { city: "Sheboygan", state: "WI" },
-  { city: "Wauwatosa", state: "WI" },
-  { city: "Fond du Lac", state: "WI" },
-  { city: "New Berlin", state: "WI" },
-  { city: "Wausau", state: "WI" },
-  { city: "Brookfield", state: "WI" },
-  { city: "Beloit", state: "WI" },
-  { city: "Greenfield", state: "WI" }
-];
+const CONTINUE_FILE = path.join(__dirname, 'continue.txt');
 
 // Configuration
 const DELAY_BETWEEN_QUERIES_MS = 3000; // 3 second delay to avoid rate-limiting
@@ -54,7 +30,7 @@ const DELAY_BETWEEN_QUERIES_MS = 3000; // 3 second delay to avoid rate-limiting
 // Regex to extract 10-digit US phone numbers
 const PHONE_REGEX = /(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})/g;
 
-// Helper to load existing progress
+// Helper to load existing directory progress
 function loadProgress() {
   if (fs.existsSync(OUTPUT_FILE)) {
     try {
@@ -69,6 +45,25 @@ function loadProgress() {
 // Helper to save progress
 function saveProgress(data) {
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// Helper to get last processed line number
+function getContinueLine() {
+  if (fs.existsSync(CONTINUE_FILE)) {
+    try {
+      const content = fs.readFileSync(CONTINUE_FILE, 'utf8').trim();
+      const lineNum = parseInt(content, 10);
+      if (!isNaN(lineNum)) return lineNum;
+    } catch (e) {
+      // Ignore
+    }
+  }
+  return 1; // Default to line 1 (header is line 1, data starts on line 2)
+}
+
+// Helper to save current line checkpoint
+function saveContinueLine(lineNum) {
+  fs.writeFileSync(CONTINUE_FILE, String(lineNum), 'utf8');
 }
 
 // Capitalize words cleanly
@@ -89,7 +84,7 @@ function scorePhoneMatches(matches, text) {
     const index = text.indexOf(fullMatch);
     if (index === -1) continue;
 
-    // Extract surrounding window of 100 characters
+    // Extract surrounding window of 80 characters
     const start = Math.max(0, index - 80);
     const end = Math.min(text.length, index + fullMatch.length + 80);
     const windowText = text.slice(start, end).toLowerCase();
@@ -109,7 +104,6 @@ function scorePhoneMatches(matches, text) {
     scored.push({ phone: fullMatch, score });
   }
 
-  // Sort descending by score
   return scored.sort((a, b) => b.score - a.score);
 }
 
@@ -126,18 +120,15 @@ async function scrapeCity(page, city, state) {
 
   // Extract all text content from the search results page
   const textContent = await page.evaluate(() => {
-    // Get text from organic result snippets
     const snippets = Array.from(document.querySelectorAll('.result__snippet'));
     const titles = Array.from(document.querySelectorAll('.result__a'));
     return snippets.map((s, i) => `${titles[i] ? titles[i].textContent : ''} : ${s.textContent}`).join('\n\n');
   });
 
-  // Find all phone number occurrences
   const matches = [];
   let match;
   PHONE_REGEX.lastIndex = 0;
   while ((match = PHONE_REGEX.exec(textContent)) !== null) {
-    // Exclude toll-free numbers
     if (!['800', '888', '877', '866', '855', '844', '833'].includes(match[1])) {
       matches.push(match);
     }
@@ -152,24 +143,79 @@ async function scrapeCity(page, city, state) {
   const bestMatch = scoredResults[0];
 
   if (bestMatch && bestMatch.score > 0) {
-    console.log(`✅ Extracted: ${bestMatch.phone} (Score: ${bestMatch.score})`);
+    console.log(`   ✅ Extracted: ${bestMatch.phone} (Score: ${bestMatch.score})`);
     return {
       phone: bestMatch.phone,
-      source: 'DuckDuckGo Scrape (Verified)',
       score: bestMatch.score
     };
   }
 
-  console.log(`⚠️ Low confidence result for ${city}, ${state}. Best phone was: ${bestMatch ? bestMatch.phone : 'None'} (Score: ${bestMatch ? bestMatch.score : 0})`);
+  console.log(`   ⚠️ Low confidence result for ${city}, ${state}. Best phone was: ${bestMatch ? bestMatch.phone : 'None'} (Score: ${bestMatch ? bestMatch.score : 0})`);
   return null;
 }
 
+// Helper to read CSV rows using readline (memory efficient for 30k+ lines)
+async function getCitiesFromCSV() {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(CSV_FILE)) {
+      reject(new Error(`CSV file not found at ${CSV_FILE}`));
+      return;
+    }
+
+    const cities = [];
+    const rl = readline.createInterface({
+      input: fs.createReadStream(CSV_FILE),
+      crlfDelay: Infinity
+    });
+
+    let lineNumber = 0;
+    rl.on('line', (line) => {
+      lineNumber++;
+      if (lineNumber === 1) return; // Skip CSV header row
+
+      // Simple CSV row parser (split on `","` after stripping leading/trailing `"`)
+      const cleanedLine = line.trim();
+      if (!cleanedLine) return;
+
+      const parts = cleanedLine.replace(/^"|"$/g, '').split('","');
+      if (parts.length >= 6) {
+        cities.push({
+          city: parts[0],      // "city"
+          state: parts[2],     // "state_id" (e.g. "WI")
+          county: parts[5],    // "county_name"
+          lineNum: lineNumber  // store original CSV line number for checkpointing
+        });
+      }
+    });
+
+    rl.on('close', () => {
+      resolve(cities);
+    });
+
+    rl.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
 async function run() {
-  console.log("=========================================");
+  console.log("==================================================");
   console.log(" alt911.com — Offline Directory Compiler");
-  console.log("=========================================");
+  console.log("==================================================");
+
+  let cities;
+  try {
+    cities = await getCitiesFromCSV();
+    console.log(`📄 Loaded ${cities.length} cities from uscities.csv`);
+  } catch (err) {
+    console.error("❌ Failed to read uscities.csv:", err.message);
+    process.exit(1);
+  }
 
   const directory = loadProgress();
+  const startLine = getContinueLine();
+  console.log(`⏭️ Resuming starting from line #${startLine} (out of ${cities.length + 1})`);
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -178,12 +224,16 @@ async function run() {
 
   let completedCount = 0;
 
-  for (const item of STARTER_CITIES) {
-    const key = `${item.city.toLowerCase()}_${item.state.toLowerCase()}`;
+  // Filter cities to process only those after the checkpoint line
+  const citiesToProcess = cities.filter(c => c.lineNum >= startLine);
 
-    // Skip if already scraped
+  for (const item of citiesToProcess) {
+    const key = `${item.city.toLowerCase()}_${item.state.toLowerCase()}`;
+    console.log(`[Line ${item.lineNum}/${cities.length + 1}] Processing ${item.city}, ${item.state}...`);
+
     if (directory[key]) {
-      console.log(`⏭️ Skipping ${item.city}, ${item.state} (Already processed)`);
+      console.log(`   ⏭️ Skipping (Already exists in JSON output)`);
+      saveContinueLine(item.lineNum);
       continue;
     }
 
@@ -193,6 +243,7 @@ async function run() {
         directory[key] = {
           city: toTitleCase(item.city),
           state: item.state.toUpperCase(),
+          county: toTitleCase(item.county),
           policePhone: result.phone,
           policeLabel: `${toTitleCase(item.city)} Police Department`,
           policeSnippet: `🕒 Verified Non-Emergency Line`,
@@ -201,18 +252,22 @@ async function run() {
         completedCount++;
       }
     } catch (e) {
-      console.error(`❌ Error scraping ${item.city}, ${item.state}:`, e.message);
+      console.error(`   ❌ Error:`, e.message);
     }
+
+    // Save checkpoint line number
+    saveContinueLine(item.lineNum);
 
     // Delay between queries to mimic human behavior
     await page.waitForTimeout(DELAY_BETWEEN_QUERIES_MS);
   }
 
   await browser.close();
-  console.log("=========================================");
-  console.log(`🎉 Compilation Complete! Scraped ${completedCount} new cities.`);
-  console.log(`📄 Saved to: ${OUTPUT_FILE}`);
-  console.log("=========================================");
+  console.log("==================================================");
+  console.log(`🎉 Done! Scraped ${completedCount} new cities.`);
+  console.log(`📄 JSON Directory: ${OUTPUT_FILE}`);
+  console.log(`📄 Checkpoint File: ${CONTINUE_FILE}`);
+  console.log("==================================================");
 }
 
 run();
