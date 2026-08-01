@@ -5,6 +5,10 @@
  * for a list of US cities, extract non-emergency dispatch numbers, and compile
  * them into a clean JSON directory (national_police_directory.json).
  * 
+ * Data Source Note:
+ *   The city listing data used to run this compilation script is sourced
+ *   from SimpleMaps: https://simplemaps.com/data/us-cities
+ * 
  * Usage:
  *  1. Create a directory named `scraper` or navigate to this workspace.
  *  2. Install dependencies: npm install playwright
