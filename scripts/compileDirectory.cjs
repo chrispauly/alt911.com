@@ -11,7 +11,7 @@
  * 
  * How to Run:
  *  1. Open terminal in the project root folder.
- *  2. Run: node scripts/compileDirectory.js
+ *  2. Run: node scripts/compileDirectory.cjs
  */
 
 const { chromium } = require('playwright');
