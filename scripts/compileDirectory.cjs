@@ -75,8 +75,8 @@ function toTitleCase(str) {
     .join(' ');
 }
 
-// Score phone numbers based on surrounding context
-function scorePhoneMatches(matches, text) {
+// Score and classify phone numbers into Police vs. County Sheriff lines
+function extractAndClassifyPhones(matches, text) {
   const scored = [];
   
   for (const match of matches) {
@@ -89,22 +89,55 @@ function scorePhoneMatches(matches, text) {
     const end = Math.min(text.length, index + fullMatch.length + 80);
     const windowText = text.slice(start, end).toLowerCase();
 
-    // High proximity context terms
-    let score = 0;
-    if (windowText.includes("non-emergency") || windowText.includes("non emergency")) score += 40;
-    if (windowText.includes("dispatch")) score += 30;
-    if (windowText.includes("police dept") || windowText.includes("police department")) score += 20;
-    if (windowText.includes("sheriff")) score += 15;
-    
-    // Demotions
-    if (windowText.includes("fax")) score -= 30;
-    if (windowText.includes("tty") || windowText.includes("tdd")) score -= 25;
-    if (windowText.includes("records")) score -= 10;
+    let policeScore = 0;
+    let countyScore = 0;
 
-    scored.push({ phone: fullMatch, score });
+    // Evaluate police score
+    if (windowText.includes("police dept") || windowText.includes("police department") || windowText.includes("city police")) policeScore += 40;
+    if (windowText.includes("non-emergency") || windowText.includes("non emergency")) policeScore += 20;
+
+    // Evaluate county/sheriff score
+    if (windowText.includes("sheriff") || windowText.includes("county dispatch") || windowText.includes("county sheriff")) countyScore += 40;
+    if (windowText.includes("dispatch")) countyScore += 20;
+
+    // General score
+    let baseScore = 0;
+    if (windowText.includes("non-emergency") || windowText.includes("non emergency")) baseScore += 20;
+    if (windowText.includes("fax")) baseScore -= 40;
+    if (windowText.includes("tty") || windowText.includes("tdd")) baseScore -= 30;
+
+    scored.push({
+      phone: fullMatch,
+      policeScore: policeScore + baseScore,
+      countyScore: countyScore + baseScore,
+      totalScore: Math.max(policeScore, countyScore) + baseScore
+    });
   }
 
-  return scored.sort((a, b) => b.score - a.score);
+  // Find best police line
+  const policeCandidates = scored.filter(s => s.policeScore > s.countyScore || s.policeScore > 10).sort((a, b) => b.policeScore - a.policeScore);
+  const bestPolice = policeCandidates[0] ? policeCandidates[0].phone : null;
+
+  // Find best county/sheriff line (must be different from police line)
+  const countyCandidates = scored.filter(s => s.phone !== bestPolice && (s.countyScore > s.policeScore || s.countyScore > 10)).sort((a, b) => b.countyScore - a.countyScore);
+  const bestCounty = countyCandidates[0] ? countyCandidates[0].phone : null;
+
+  let finalPolice = bestPolice;
+  let finalCounty = bestCounty;
+
+  if (!finalPolice && scored.length > 0) {
+    const bestOverall = scored.sort((a, b) => b.totalScore - a.totalScore)[0];
+    if (bestOverall.countyScore > bestOverall.policeScore) {
+      finalCounty = bestOverall.phone;
+    } else {
+      finalPolice = bestOverall.phone;
+    }
+  }
+
+  return {
+    policePhone: finalPolice,
+    countyPhone: finalCounty
+  };
 }
 
 async function scrapeCity(page, city, state) {
@@ -134,19 +167,15 @@ async function scrapeCity(page, city, state) {
     return null;
   }
 
-  const scoredResults = scorePhoneMatches(matches, textContent);
-  const bestMatch = scoredResults[0];
-
-  if (bestMatch && bestMatch.score > 0) {
-    console.log(`   ✅ Extracted: ${bestMatch.phone} (Score: ${bestMatch.score})`);
-    return {
-      phone: bestMatch.phone,
-      score: bestMatch.score
-    };
+  const result = extractAndClassifyPhones(matches, textContent);
+  if (result.policePhone) {
+    console.log(`   ✅ Police: ${result.policePhone}${result.countyPhone ? ` | County: ${result.countyPhone}` : ''}`);
+  } else if (result.countyPhone) {
+    console.log(`   ✅ County: ${result.countyPhone}`);
+  } else {
+    console.log(`   ⚠️ Low confidence result for ${city}, ${state}`);
   }
-
-  console.log(`   ⚠️ Low confidence result for ${city}, ${state}. Best phone was: ${bestMatch ? bestMatch.phone : 'None'} (Score: ${bestMatch ? bestMatch.score : 0})`);
-  return null;
+  return result;
 }
 
 // Helper to read CSV rows using readline (memory efficient for 30k+ lines)
@@ -234,15 +263,20 @@ async function run() {
 
     try {
       const result = await scrapeCity(page, item.city, item.state);
-      if (result) {
+      if (result && (result.policePhone || result.countyPhone)) {
         directory[key] = {
           city: toTitleCase(item.city),
           state: item.state.toUpperCase(),
           county: toTitleCase(item.county),
-          policePhone: result.phone,
-          policeLabel: `${toTitleCase(item.city)} Police Department`,
-          policeSnippet: `🕒 Verified Non-Emergency Line`,
+          policePhone: result.policePhone || undefined,
+          policeLabel: result.policePhone ? `${toTitleCase(item.city)} Police Department` : undefined,
+          policeSnippet: result.policePhone ? `🕒 Verified Non-Emergency Line` : undefined,
+          countyPhone: result.countyPhone || undefined,
+          countyLabel: result.countyPhone ? `${toTitleCase(item.county)} Sheriff & Dispatch` : undefined,
+          countySnippet: result.countyPhone ? `🕒 24/7 County Dispatch Line` : undefined,
         };
+        // Clean undefined properties so they don't bloat the JSON
+        Object.keys(directory[key]).forEach(k => directory[key][k] === undefined && delete directory[key][k]);
         saveProgress(directory);
         completedCount++;
       }
