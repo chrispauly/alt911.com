@@ -5,10 +5,9 @@ import { Buffer } from 'node:buffer';
 import type { IncomingMessage } from 'node:http';
 
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
 ];
 
 function getRandomUserAgent(): string {
@@ -28,7 +27,7 @@ function fetchURL(url: string, options: { method?: string; postData?: string } =
           'User-Agent': getRandomUserAgent(),
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate',
+          'Accept-Encoding': 'gzip, deflate, br',
           ...(isPost && postData ? { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(postData) } : {}),
         },
       },
@@ -37,6 +36,7 @@ function fetchURL(url: string, options: { method?: string; postData?: string } =
         const encoding = res.headers['content-encoding'];
         if (encoding === 'gzip') stream = res.pipe(zlib.createGunzip());
         else if (encoding === 'deflate') stream = res.pipe(zlib.createInflate());
+        else if (encoding === 'br') stream = res.pipe(zlib.createBrotliDecompress());
 
         let data = '';
         stream.on('data', (c: any) => (data += c.toString('utf-8')));
@@ -54,9 +54,16 @@ function fetchURL(url: string, options: { method?: string; postData?: string } =
 
 function decodeAndClean(html: string): string {
   return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/&#40;/g, '(')
+    .replace(/&#41;/g, ')')
+    .replace(/&#45;/g, '-')
+    .replace(/&#8208;/g, '-')
     .replace(/&#8209;/g, '-')
     .replace(/&#8211;/g, '-')
     .replace(/&#8212;/g, '-')
+    .replace(/&minus;/g, '-')
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-')
     .replace(/&nbsp;/g, ' ')
     .replace(/&#x27;/g, "'")
@@ -99,65 +106,60 @@ function extractStructuredSnippet(rawSnippet: string, isCountyOrSheriff: boolean
   return parts.join(' · ');
 }
 
-export async function performLiveSearch(query: string): Promise<any> {
-  // Engine 1: DDG Lite POST
-  let html = await fetchURL('https://lite.duckduckgo.com/lite/', {
-    method: 'POST',
-    postData: querystring.stringify({ q: query, kl: 'us-en' }),
-  });
+interface PhoneCandidate {
+  number: string;
+  score: number;
+  rawSnippet: string;
+  structuredSnippet?: string;
+  isCountyOrSheriff: boolean;
+}
 
-  // Engine 2 Fallback: Bing Search if DDG Lite is empty or bot-blocked
-  if (!html || html.includes('bots use DuckDuckGo too') || html.length < 1500) {
-    html = await fetchURL(`https://www.bing.com/search?q=${encodeURIComponent(query)}`);
-  }
-
-  if (!html) {
-    return {
-      found: false,
-      queryUsed: query,
-      message: 'Unable to reach search engine.',
-    };
-  }
-
+function parseCandidatesFromHTML(html: string, query: string): PhoneCandidate[] {
   const cleanText = decodeAndClean(html);
-
   const phoneRegex = /(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})/g;
   let match: RegExpExecArray | null;
-  const candidates: Array<{
-    number: string;
-    score: number;
-    structuredSnippet?: string;
-    isCountyOrSheriff: boolean;
-  }> = [];
+  const candidates: PhoneCandidate[] = [];
+
+  const queryWords = query.toLowerCase().split(/[\s,]+/).filter(w => w.length > 2 && w !== 'police' && w !== 'phone' && w !== 'number' && w !== 'non' && w !== 'emergency');
 
   while ((match = phoneRegex.exec(cleanText)) !== null) {
     const area = match[1];
     const prefix = match[2];
     const line = match[3];
 
+    // Exclude toll-free area codes (800, 888, 877, 866, 855, 844, 833)
+    if (['800', '888', '877', '866', '855', '844', '833'].includes(area)) continue;
+
     const formatted = `(${area}) ${prefix}-${line}`;
-    const startIdx = Math.max(0, match.index - 150);
-    const endIdx = Math.min(cleanText.length, match.index + 150);
+    const startIdx = Math.max(0, match.index - 350);
+    const endIdx = Math.min(cleanText.length, match.index + 350);
     const rawSnippet = cleanSnippetText(cleanText.substring(startIdx, endIdx));
 
-    let score = 0;
+    let score = 10; // Baseline score for appearing in search results
     const lowerSnip = rawSnippet.toLowerCase();
 
+    // Heavy penalty for social media / spam / lost pet posts
     if (
       lowerSnip.includes('lost dog') ||
-      lowerSnip.includes('lost his way') ||
-      lowerSnip.includes('happy exploring') ||
+      lowerSnip.includes('lost cat') ||
       lowerSnip.includes('scam') ||
-      lowerSnip.includes('facebook.com')
+      lowerSnip.includes('facebook.com/posts')
     ) {
       score -= 50;
     }
 
-    if (lowerSnip.includes('non-emergency') || lowerSnip.includes('non emergency')) score += 25;
-    if (lowerSnip.includes('dispatch')) score += 20;
-    if (lowerSnip.includes('police')) score += 15;
-    if (lowerSnip.includes('sheriff')) score += 15;
-    if (lowerSnip.includes('department') || lowerSnip.includes('dept') || lowerSnip.includes('office')) score += 10;
+    if (lowerSnip.includes('non-emergency') || lowerSnip.includes('non emergency')) score += 30;
+    if (lowerSnip.includes('dispatch')) score += 25;
+    if (lowerSnip.includes('police')) score += 20;
+    if (lowerSnip.includes('sheriff')) score += 20;
+    if (lowerSnip.includes('department') || lowerSnip.includes('dept') || lowerSnip.includes('office') || lowerSnip.includes('station')) score += 15;
+    if (lowerSnip.includes('business office') || lowerSnip.includes('administrative') || lowerSnip.includes('contact us')) score += 10;
+
+    for (const word of queryWords) {
+      if (lowerSnip.includes(word)) {
+        score += 15;
+      }
+    }
 
     const isCountyOrSheriff = lowerSnip.includes('sheriff') || lowerSnip.includes('county') || lowerSnip.includes('dispatch center');
     const structuredSnippet = extractStructuredSnippet(rawSnippet, isCountyOrSheriff);
@@ -165,33 +167,75 @@ export async function performLiveSearch(query: string): Promise<any> {
     candidates.push({
       number: formatted,
       score,
+      rawSnippet,
       structuredSnippet,
       isCountyOrSheriff,
     });
   }
 
-  const validCandidates = candidates.filter((c) => c.score > 0);
-  validCandidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
 
-  if (validCandidates.length > 0) {
-    const primary = validCandidates[0];
+export async function performLiveSearch(query: string): Promise<any> {
+  const queryVariants = [
+    query,
+    query.replace(/police non emergency phone number/i, 'police department phone number'),
+  ];
 
-    const secondaryCandidate = validCandidates.find(
-      (c) => c.number !== primary.number && (c.isCountyOrSheriff || c.score >= 20)
-    );
+  for (const q of queryVariants) {
+    let candidates: PhoneCandidate[] = [];
 
-    return {
-      found: true,
-      phoneNumber: primary.number,
-      label: primary.isCountyOrSheriff ? 'County Sheriff & Dispatch' : 'Municipal Police Line',
-      snippet: primary.structuredSnippet,
-      countyNumber: secondaryCandidate ? secondaryCandidate.number : undefined,
-      countyLabel: secondaryCandidate?.isCountyOrSheriff ? 'County Sheriff & Dispatch Line' : 'Regional Dispatch Line',
-      countySnippet: secondaryCandidate ? secondaryCandidate.structuredSnippet : undefined,
-      queryUsed: query,
-      confidence: primary.score >= 25 ? 'High' : 'Medium',
-      source: 'Google / Web Search Info Box',
-    };
+    // Engine 1: DDG HTML POST
+    let html = await fetchURL('https://html.duckduckgo.com/html/', {
+      method: 'POST',
+      postData: querystring.stringify({ q: q, kl: 'us-en' }),
+    });
+    candidates = parseCandidatesFromHTML(html, q);
+
+    // Engine 2: DDG Lite POST fallback
+    if (candidates.length === 0) {
+      html = await fetchURL('https://lite.duckduckgo.com/lite/', {
+        method: 'POST',
+        postData: querystring.stringify({ q: q, kl: 'us-en' }),
+      });
+      candidates = parseCandidatesFromHTML(html, q);
+    }
+
+    // Engine 3: Bing GET fallback
+    if (candidates.length === 0) {
+      html = await fetchURL(`https://www.bing.com/search?q=${encodeURIComponent(q)}`);
+      candidates = parseCandidatesFromHTML(html, q);
+    }
+
+    // Engine 4: Google GET fallback
+    if (candidates.length === 0) {
+      html = await fetchURL(`https://www.google.com/search?q=${encodeURIComponent(q)}&gbv=1`);
+      candidates = parseCandidatesFromHTML(html, q);
+    }
+
+    const validCandidates = candidates.filter((c) => c.score > 0);
+    validCandidates.sort((a, b) => b.score - a.score);
+
+    if (validCandidates.length > 0) {
+      const primary = validCandidates[0];
+
+      const secondaryCandidate = validCandidates.find(
+        (c) => c.number !== primary.number && (c.isCountyOrSheriff || c.score >= 20)
+      );
+
+      return {
+        found: true,
+        phoneNumber: primary.number,
+        label: primary.isCountyOrSheriff ? 'County Sheriff & Dispatch' : 'Municipal Police Line',
+        snippet: primary.structuredSnippet,
+        countyNumber: secondaryCandidate ? secondaryCandidate.number : undefined,
+        countyLabel: secondaryCandidate?.isCountyOrSheriff ? 'County Sheriff & Dispatch Line' : 'Regional Dispatch Line',
+        countySnippet: secondaryCandidate ? secondaryCandidate.structuredSnippet : undefined,
+        queryUsed: q,
+        confidence: primary.score >= 25 ? 'High' : 'Medium',
+        source: 'Google / Web Search Info Box',
+      };
+    }
   }
 
   return {
