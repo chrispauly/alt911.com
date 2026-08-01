@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   HelpCircle,
   Sun,
-  Moon
+  Moon,
+  X
 } from 'lucide-react';
 import {
   GLOBAL_N11_SERVICES,
@@ -372,28 +373,43 @@ export const App: React.FC = () => {
           <div className="action-card" style={{ marginTop: '0' }}>
             <form onSubmit={handleSearchSubmit} className="search-bar-container">
               <div className="search-input-wrapper">
-                <Search className="search-icon" size={18} />
+                <Search className="search-icon" size={20} />
                 <input
                   type="text"
                   className="search-input"
-                  placeholder="Search another city, zip, or area (e.g. Oregon WI)..."
+                  placeholder="Search city, zip code, or area (e.g. Verona WI)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                 />
+                {searchQuery.length > 0 && (
+                  <button
+                    type="button"
+                    className="search-clear-btn"
+                    onClick={() => setSearchQuery('')}
+                    title="Clear search text"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
-              <button type="submit" className="btn-search-compact" disabled={isSearching}>
-                {isSearching ? "Searching..." : "Lookup"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDetectLocation(false)}
-                className="btn-gps-compact"
-                disabled={isLocating}
-                title="Use current GPS location"
-              >
-                <Compass size={18} className={isLocating ? "pulse-icon" : ""} />
-                <span>GPS</span>
-              </button>
+
+              <div className="search-actions-row">
+                <button type="submit" className="btn-search-full" disabled={isSearching}>
+                  <Search size={16} />
+                  <span>{isSearching ? "Searching..." : "Lookup City / Zip"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDetectLocation(false)}
+                  className="btn-gps-full"
+                  disabled={isLocating}
+                  title="Use current GPS location"
+                >
+                  <Compass size={18} className={isLocating ? "pulse-icon" : ""} />
+                  <span>Use GPS Location</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>
