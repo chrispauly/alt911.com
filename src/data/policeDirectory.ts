@@ -229,14 +229,32 @@ export function lookupLocalPoliceDirectory(cityName?: string, stateName?: string
   const cleanCounty = (countyName || '').replace(/\b(county|parish|borough|municipality)\b/gi, '').trim().toLowerCase();
   const cleanState = (stateName || '').trim().toLowerCase();
 
-  return DIRECTORY_POLICE_NUMBERS.find((entry) => {
-    const cityMatch = entry.city.toLowerCase() === cleanCity || (entry.county && entry.county.toLowerCase() === cleanCity);
-    const countyMatch = cleanCounty && (entry.city.toLowerCase() === cleanCounty || (entry.county && entry.county.toLowerCase().includes(cleanCounty)));
+  // 1. Exact City Match Priority
+  const exactCityMatch = DIRECTORY_POLICE_NUMBERS.find((entry) => {
+    const cityMatch = entry.city.toLowerCase() === cleanCity;
     const stateMatch = !cleanState || entry.state.toLowerCase() === cleanState || cleanState.includes(entry.state.toLowerCase()) || entry.state.toLowerCase().includes(cleanState);
-    return (cityMatch || countyMatch) && stateMatch;
-  }) || DIRECTORY_POLICE_NUMBERS.find((entry) => {
-    const cityMatch = entry.city.toLowerCase() === cleanCity || (entry.county && entry.county.toLowerCase() === cleanCity);
-    const countyMatch = cleanCounty && (entry.city.toLowerCase() === cleanCounty || (entry.county && entry.county.toLowerCase().includes(cleanCounty)));
-    return cityMatch || countyMatch;
+    return cityMatch && stateMatch;
   });
+  if (exactCityMatch) return exactCityMatch;
+
+  // 2. County Fallback Match Priority
+  const countyFallbackMatch = DIRECTORY_POLICE_NUMBERS.find((entry) => {
+    const countyMatch = cleanCounty && entry.county && entry.county.toLowerCase().includes(cleanCounty);
+    const stateMatch = !cleanState || entry.state.toLowerCase() === cleanState || cleanState.includes(entry.state.toLowerCase()) || entry.state.toLowerCase().includes(cleanState);
+    return countyMatch && stateMatch;
+  });
+
+  if (countyFallbackMatch) {
+    // Return Calumet/Manitowoc county dispatch info as the primary card since no municipal match is available
+    return {
+      city: cityName || countyFallbackMatch.city,
+      state: stateName || countyFallbackMatch.state,
+      county: countyFallbackMatch.county,
+      policePhone: countyFallbackMatch.countyPhone || countyFallbackMatch.policePhone,
+      policeLabel: countyFallbackMatch.countyLabel || `${countyFallbackMatch.county} Sheriff & Dispatch`,
+      policeSnippet: countyFallbackMatch.countySnippet || countyFallbackMatch.policeSnippet,
+    };
+  }
+
+  return undefined;
 }
