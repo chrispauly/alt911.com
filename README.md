@@ -8,15 +8,24 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 
 ---
 
+## 📸 Screenshots
+
+| Desktop View | Mobile View |
+| :---: | :---: |
+| ![Desktop Preview](public/screenshots/desktop_preview.png) | ![Mobile Preview](public/screenshots/mobile_preview.png) |
+
+---
+
 ## 🚀 Key Features
 
 * **📍 Live Location Detection**: One-tap GPS detection resolves your exact city, county, and state via reverse geocoding.
-* **🔍 Automatic 10-Digit Lookup**: Queries live search APIs to retrieve verified local police dispatch and county sheriff phone numbers.
+* **⚡ Instant 0ms Local Directory**: Built-in client-side database instantly matches municipal police departments and 24/7 county dispatch lines.
+* **🔍 Pure Client-Side Fetching**: 100% direct browser execution without server-side processing, API rate limits, or Vercel serverless costs.
 * **🏢 Dual City & County Line Display**: Shows both municipal police lines and regional/county 24/7 dispatch lines when both exist.
-* **📍 Station Address & Hours Extraction**: Automatically parses verified police station street addresses and operating hours/24-7 availability without displaying unhelpful search blurbs.
-* **🏢 Conditional 311 Municipal Card**: Automatically renders a direct 311 municipal call button when searching within one of the 36+ major participating North American cities.
+* **📍 Station Address & Hours Extraction**: Automatically displays verified police station street addresses and operating hours/24-7 availability.
+* **📱 Clear Search UI**: Full-width search input with automatic text highlighting on focus, one-tap `(X)` clear button, and distinct high-contrast border.
+* **🏢 Conditional 311 Municipal Card**: Automatically renders a direct 311 municipal call button when searching within one of 36+ participating North American cities.
 * **🌓 Smart Dark / Light Mode**: Automatically adapts theme based on device OS preference and time-of-day (Light theme 7am–7pm / Dark theme 7pm–7am) with a manual header toggle.
-* **📱 Mobile-First Responsive Design**: Optimized for touch devices with a 3-column navigation grid, high contrast WCAG-compliant colors, and smooth scroll positioning.
 * **🌐 Universal N11 Directory**: Includes a guide for 211, 311, 511, 811, 988, UK 101/111, New Zealand 105, Australia 131 444, and Germany 116 117.
 
 ---
@@ -30,30 +39,27 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 [ OpenStreetMap / Nominatim Reverse Geocoding ] ──► (Resolves City, County, State)
             │
             ▼
-[ Server Middleware API: /api/search-phone ]
+[ 100% Client-Side Search Pipeline ]
             │
-            ├─► 1. Executes Live Search Query (DDG Lite / Bing Fallback API)
-            ├─► 2. Sanitizes HTML & Decodes Unicode Entities
-            ├─► 3. Regex Phone Parsing (10-digit North American Format)
-            ├─► 4. Context Proximity Scoring Algorithm
-            └─► 5. Structured Address & Office Hours Extraction
+            ├─► 1. Instant Match against Built-in Client Directory (0ms)
+            ├─► 2. Direct Browser Query to DuckDuckGo Instant Answer API
+            └─► 3. Instant 1-Tap Call & Direct Phone Search Buttons
             │
             ▼
 [ Render Verified Dispatch Cards & 1-Click Call Buttons ]
 ```
 
-1. **Geocoding**: When GPS is triggered or a search term is submitted, the client queries the **OpenStreetMap Nominatim API** to resolve geographic coordinates to structured location metadata (City, County, State).
-2. **Server Middleware Lookup (`/api/search-phone`)**: A Vite custom middleware intercepts search requests server-side to avoid CORS restrictions.
-3. **Multi-Engine Search Fallback & Header Rotation**: The engine queries search endpoints using dynamic User-Agent rotation. If one search provider is rate-limited, it automatically fails over to secondary search engines.
-4. **Phone Parsing & Proximity Scoring**: Raw HTML is stripped of script tags and decoded. A regular expression identifies standard 10-digit US/CA phone numbers `(XXX) XXX-XXXX`. Candidate numbers are scored based on proximity to keywords like `"non-emergency"`, `"dispatch"`, `"police"`, and `"sheriff"`, while penalizing social media posts, scam notices, or lost pet blurbs.
-5. **Structured Snippet Extraction**: Snippets are scanned for verified street addresses (e.g. `📍 111 Lincoln St`) and station hours or 24/7 dispatch notes (e.g. `🕒 24/7 Non-Emergency County Dispatch`). If neither exists, snippet text is hidden for a clean UI.
+1. **Geocoding**: When GPS is triggered or a search term is submitted, the browser queries the **OpenStreetMap Nominatim API** to resolve geographic coordinates to structured location metadata (City, County, State).
+2. **Instant Directory Match**: The client checks an embedded client-side database of verified 10-digit police department lines and 24/7 county dispatch centers.
+3. **CORS API Query**: If unlisted, the client fetches CORS-enabled search endpoints directly from the user's phone or browser.
+4. **1-Tap Action Cards**: Displays verified 10-digit phone numbers, station addresses, 24/7 dispatch lines, and direct 1-tap call buttons right on the main page.
 
 ---
 
 ## 📦 Tech Stack & Dependencies
 
-* **Frontend Framework**: [React 18](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/)
-* **Build Tool & Server Middleware**: [Vite 8](https://vitejs.dev/)
+* **Frontend Framework**: [React 19](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/)
+* **Build Tool**: [Vite 8](https://vitejs.dev/)
 * **Iconography**: [Lucide React](https://lucide.dev/)
 * **Geocoding API**: [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/)
 * **Styling**: Vanilla CSS with modern custom design tokens and dynamic Light/Dark mode state
@@ -70,8 +76,8 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/alt911.git
-   cd alt911
+   git clone https://github.com/chrispauly/alt911.com.git
+   cd alt911.com
    ```
 
 2. **Install dependencies**:
@@ -95,8 +101,7 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 ## 📄 Security & Privacy
 
 * **No User Tracking**: User location coordinates and search terms are processed ephemeral-only for reverse geocoding and phone matching. No user location data is stored or logged.
-* **Input Sanitization**: All API search parameters are sanitized against null bytes, control characters, and capped at 150 characters to prevent SSRF and buffer abuse.
-* **ReDoS Prevention**: Regular expression matching algorithms are non-backtracking and run in linear time $O(N)$.
+* **Client-Only Execution**: Zero server-side data processing or logging. All requests originate directly from the user's browser.
 
 ---
 
