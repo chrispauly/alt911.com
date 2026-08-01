@@ -27,6 +27,7 @@ export interface GeoLocationResult {
   };
   liveSearchResult?: LiveSearchResult;
   searchQueryUrl: string;
+  ddgSearchQueryUrl: string;
   isFallback: boolean;
 }
 
@@ -103,7 +104,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
     const searchQueryString = `${cityName || countyName || "local"} ${stateName} police non emergency phone number`;
     const queryTerm = encodeURIComponent(searchQueryString);
 
-    // Poll live web search behind the scenes
     const liveSearchResult = await fetchLiveSearchResults(searchQueryString);
 
     return {
@@ -119,6 +119,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
       },
       liveSearchResult,
       searchQueryUrl: `https://www.google.com/search?q=${queryTerm}`,
+      ddgSearchQueryUrl: `https://duckduckgo.com/?q=${queryTerm}`,
       isFallback: false,
     };
   } catch (error) {
@@ -137,6 +138,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
       },
       liveSearchResult,
       searchQueryUrl: `https://www.google.com/search?q=${encodeURIComponent(searchQueryString)}`,
+      ddgSearchQueryUrl: `https://duckduckgo.com/?q=${encodeURIComponent(searchQueryString)}`,
       isFallback: true,
     };
   }
@@ -148,7 +150,6 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       ? query
       : `${query} police non emergency phone number`;
 
-    // Trigger nominatim geocoding & live web search in parallel
     const [nominatimRes, liveSearchResult] = await Promise.all([
       fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
@@ -202,6 +203,7 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       },
       liveSearchResult,
       searchQueryUrl: `https://www.google.com/search?q=${encodeURIComponent(searchQueryString)}`,
+      ddgSearchQueryUrl: `https://duckduckgo.com/?q=${encodeURIComponent(searchQueryString)}`,
       isFallback: false,
     };
   } catch (err) {

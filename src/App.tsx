@@ -271,14 +271,25 @@ export const App: React.FC = () => {
                       <Phone size={18} /> Call {locationResult.liveSearchResult.phoneNumber}
                     </a>
                   ) : (
-                    <a
-                      href={locationResult.searchQueryUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-call btn-search-web"
-                    >
-                      <ExternalLink size={18} /> Search Local Dispatch Number
-                    </a>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <a
+                        href={locationResult.searchQueryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-call btn-search-web"
+                      >
+                        <ExternalLink size={18} /> Search Google Directly on Phone
+                      </a>
+                      <a
+                        href={locationResult.ddgSearchQueryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-call btn-search-web"
+                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                      >
+                        <Search size={16} /> Search DuckDuckGo on Phone
+                      </a>
+                    </div>
                   )}
                 </div>
               </div>
