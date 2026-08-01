@@ -596,14 +596,52 @@ export const App: React.FC = () => {
               </ul>
             </div>
           </div>
+
+          <div className="qa-card">
+            <h3 className="qa-question">
+              <AlertTriangle size={18} color="var(--accent-amber)" />
+              Important Legal & Data Disclaimer
+            </h3>
+            <div className="qa-answer">
+              <p>
+                <strong>Informational Use Only:</strong> Directory numbers and addresses on alt911.com are compiled automatically from public data sources, open geocoding indexes, and municipal registries.
+              </p>
+              <p style={{ marginTop: '0.5rem' }}>
+                Local dispatch center boundaries, operating hours, and phone numbers may be modified by local government authorities without prior notice. Never rely on alt911.com during an active emergency or life-threatening situation — always dial <strong>911</strong> directly.
+              </p>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Public Safety & Data Disclaimer */}
+      <div style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '1rem',
+        padding: '1rem 1.25rem',
+        marginTop: '2rem',
+        fontSize: '0.82rem',
+        color: 'var(--text-secondary)',
+        lineHeight: '1.5'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', color: 'var(--accent-amber)', fontWeight: 700 }}>
+          <AlertTriangle size={16} />
+          <span>Public Safety & Data Disclaimer</span>
+        </div>
+        <p>
+          <strong>Not for Emergencies:</strong> If you are experiencing a life-threatening emergency, crime in progress, fire, or medical crisis, immediately dial <strong>911</strong> (or your local emergency short code). Do not use this website in an active emergency.
+        </p>
+        <p style={{ marginTop: '0.4rem' }}>
+          <strong>Automated Directory Notice:</strong> Directory information on alt911.com is compiled automatically from public data sources, open geocoding databases, and search indexes for informational purposes only. Phone numbers, operating hours, and service boundaries are maintained by local authorities and subject to change without notice. alt911.com is an independent directory service and is not affiliated with or operated by any government agency or emergency dispatch center.
+        </p>
+      </div>
 
       {/* Footer */}
       <footer className="footer">
         <p>&copy; {new Date().getFullYear()} alt911.com — The Non-Emergency Dispatch Finder.</p>
         <div className="footer-links" style={{ marginTop: '0.4rem' }}>
-          <span>Always dial 911 in life-threatening emergencies</span>
+          <span>Informational Directory · Always dial 911 in life-threatening emergencies</span>
         </div>
       </footer>
     </div>

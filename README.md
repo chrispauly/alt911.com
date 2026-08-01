@@ -104,10 +104,12 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 
 ---
 
-## 📄 Security & Privacy
+## 📄 Security, Privacy & Legal Disclaimer
 
+* **Emergency Warning**: In any active emergency, crime in progress, fire, or life-threatening situation, always dial **911** immediately. Do not rely on alt911.com or non-emergency lines during an active emergency.
+* **Automated Data Disclaimer**: Directory numbers, station addresses, and operating hours are compiled automatically from public data sources, open geocoding indexes, and municipal search directories for informational purposes only.
+* **No Agency Affiliation**: alt911.com is an independent directory tool and is not operated by or affiliated with any municipal, state, or federal government emergency dispatch agency.
 * **No User Tracking**: User location coordinates and search terms are processed ephemeral-only for reverse geocoding and phone matching. No user location data is stored or logged.
-* **Client-Only Execution**: Zero server-side data processing or logging. All requests originate directly from the user's browser.
 
 ---
 
