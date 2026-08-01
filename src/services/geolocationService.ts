@@ -9,6 +9,7 @@ export interface LiveSearchResult {
   queryUsed?: string;
   confidence?: string;
   source?: string;
+  message?: string;
 }
 
 export interface GeoLocationResult {
@@ -31,15 +32,52 @@ export interface GeoLocationResult {
   isFallback: boolean;
 }
 
-export async function fetchLiveSearchResults(query: string): Promise<LiveSearchResult | undefined> {
+export async function fetchClientSideSearchResults(query: string): Promise<LiveSearchResult | undefined> {
   try {
-    const res = await fetch(`/api/search-phone?query=${encodeURIComponent(query)}`);
-    if (!res.ok) return undefined;
+    const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const res = await fetch(ddgUrl);
+    if (!res.ok) return { found: false, queryUsed: query };
+
     const data = await res.json();
-    return data;
+    const textToSearch = [
+      data.AbstractText || '',
+      data.Heading || '',
+      ...(data.RelatedTopics || []).map((t: any) => t.Text || ''),
+    ].join(' ');
+
+    const phoneRegex = /(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})/g;
+    const match = phoneRegex.exec(textToSearch);
+
+    if (match) {
+      const area = match[1];
+      const prefix = match[2];
+      const line = match[3];
+
+      if (!['800', '888', '877', '866', '855', '844', '833'].includes(area)) {
+        return {
+          found: true,
+          phoneNumber: `(${area}) ${prefix}-${line}`,
+          label: 'Municipal Police Line',
+          snippet: data.AbstractText ? `📍 ${data.AbstractText.slice(0, 140)}` : undefined,
+          queryUsed: query,
+          confidence: 'High',
+          source: 'DuckDuckGo Instant Answer API (Client-side)',
+        };
+      }
+    }
+
+    return {
+      found: false,
+      queryUsed: query,
+      message: 'Direct client-side phone search links ready.',
+    };
   } catch (err) {
-    console.warn("Live search API polling issue:", err);
-    return undefined;
+    console.warn("Client-side search fetch notice:", err);
+    return {
+      found: false,
+      queryUsed: query,
+      message: 'Direct client-side search ready.',
+    };
   }
 }
 
@@ -104,7 +142,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
     const searchQueryString = `${cityName || countyName || "local"} ${stateName} police non emergency phone number`;
     const queryTerm = encodeURIComponent(searchQueryString);
 
-    const liveSearchResult = await fetchLiveSearchResults(searchQueryString);
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString);
 
     return {
       latitude: lat,
@@ -125,7 +163,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
   } catch (error) {
     console.error("Reverse geocoding error:", error);
     const searchQueryString = `police non emergency number near ${lat},${lng}`;
-    const liveSearchResult = await fetchLiveSearchResults(searchQueryString);
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString);
 
     return {
       latitude: lat,
@@ -162,7 +200,7 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
           },
         }
       ).then((r) => (r.ok ? r.json() : null)),
-      fetchLiveSearchResults(searchQueryString),
+      fetchClientSideSearchResults(searchQueryString),
     ]);
 
     let lat = 0;
