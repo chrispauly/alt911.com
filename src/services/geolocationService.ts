@@ -34,9 +34,9 @@ export interface GeoLocationResult {
   isFallback: boolean;
 }
 
-export async function fetchClientSideSearchResults(query: string, cityName?: string, stateName?: string): Promise<LiveSearchResult | undefined> {
+export async function fetchClientSideSearchResults(query: string, cityName?: string, stateName?: string, countyName?: string): Promise<LiveSearchResult | undefined> {
   // Step 1: Check built-in Instant Police Directory (0ms latency!)
-  const localMatch = lookupLocalPoliceDirectory(cityName, stateName);
+  const localMatch = lookupLocalPoliceDirectory(cityName, stateName, countyName);
   if (localMatch) {
     return {
       found: true,
@@ -157,7 +157,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
     const searchQueryString = `${cityName || countyName || "local"} ${stateName} police non emergency phone number`;
     const queryTerm = encodeURIComponent(searchQueryString);
 
-    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName);
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName, countyName);
 
     return {
       latitude: lat,
@@ -203,9 +203,13 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       ? query
       : `${query} police non emergency phone number`;
 
+    // Normalize US zip codes to search specifically in the US
+    const isZipCode = /^\d{5}(-\d{4})?$/.test(query.trim());
+    const geocodeQuery = isZipCode ? `${query.trim()} USA` : query;
+
     const nominatimRes = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        query
+        geocodeQuery
       )}&format=json&addressdetails=1&limit=1`,
       {
         headers: {
@@ -240,7 +244,7 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
     const countryName = addr.country || "";
     const postcode = addr.postcode || "";
 
-    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName);
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName, countyName);
 
     return {
       latitude: lat,

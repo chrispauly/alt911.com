@@ -211,15 +211,21 @@ export const DIRECTORY_POLICE_NUMBERS: LocalPoliceInfo[] = [
   }
 ];
 
-export function lookupLocalPoliceDirectory(cityName?: string, stateName?: string): LocalPoliceInfo | undefined {
-  if (!cityName) return undefined;
+export function lookupLocalPoliceDirectory(cityName?: string, stateName?: string, countyName?: string): LocalPoliceInfo | undefined {
+  if (!cityName && !countyName) return undefined;
 
-  const cleanCity = cityName.trim().toLowerCase();
+  const cleanCity = (cityName || '').split(',')[0].trim().toLowerCase();
+  const cleanCounty = (countyName || '').replace(/\b(county|parish|borough|municipality)\b/gi, '').trim().toLowerCase();
   const cleanState = (stateName || '').trim().toLowerCase();
 
   return DIRECTORY_POLICE_NUMBERS.find((entry) => {
-    const cityMatch = entry.city.toLowerCase() === cleanCity;
-    const stateMatch = !cleanState || entry.state.toLowerCase() === cleanState || cleanState.includes(entry.state.toLowerCase());
-    return cityMatch && stateMatch;
-  }) || DIRECTORY_POLICE_NUMBERS.find((entry) => entry.city.toLowerCase() === cleanCity);
+    const cityMatch = entry.city.toLowerCase() === cleanCity || (entry.county && entry.county.toLowerCase() === cleanCity);
+    const countyMatch = cleanCounty && (entry.city.toLowerCase() === cleanCounty || (entry.county && entry.county.toLowerCase().includes(cleanCounty)));
+    const stateMatch = !cleanState || entry.state.toLowerCase() === cleanState || cleanState.includes(entry.state.toLowerCase()) || entry.state.toLowerCase().includes(cleanState);
+    return (cityMatch || countyMatch) && stateMatch;
+  }) || DIRECTORY_POLICE_NUMBERS.find((entry) => {
+    const cityMatch = entry.city.toLowerCase() === cleanCity || (entry.county && entry.county.toLowerCase() === cleanCity);
+    const countyMatch = cleanCounty && (entry.city.toLowerCase() === cleanCounty || (entry.county && entry.county.toLowerCase().includes(cleanCounty)));
+    return cityMatch || countyMatch;
+  });
 }
