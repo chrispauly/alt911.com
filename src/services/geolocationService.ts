@@ -1,3 +1,5 @@
+import { lookupLocalPoliceDirectory } from '../data/policeDirectory';
+
 export interface LiveSearchResult {
   found: boolean;
   phoneNumber?: string;
@@ -32,53 +34,66 @@ export interface GeoLocationResult {
   isFallback: boolean;
 }
 
-export async function fetchClientSideSearchResults(query: string): Promise<LiveSearchResult | undefined> {
+export async function fetchClientSideSearchResults(query: string, cityName?: string, stateName?: string): Promise<LiveSearchResult | undefined> {
+  // Step 1: Check built-in Instant Police Directory (0ms latency!)
+  const localMatch = lookupLocalPoliceDirectory(cityName, stateName);
+  if (localMatch) {
+    return {
+      found: true,
+      phoneNumber: localMatch.policePhone,
+      label: localMatch.policeLabel || `${localMatch.city} Police Department`,
+      snippet: localMatch.policeSnippet,
+      countyNumber: localMatch.countyPhone,
+      countyLabel: localMatch.countyLabel || `${localMatch.county || 'County'} Sheriff & Dispatch`,
+      countySnippet: localMatch.countySnippet,
+      queryUsed: query,
+      confidence: 'High',
+      source: 'Instant Municipal Directory (Client-side)',
+    };
+  }
+
+  // Step 2: Query DuckDuckGo Instant Answer API directly from browser
   try {
     const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const res = await fetch(ddgUrl);
-    if (!res.ok) return { found: false, queryUsed: query };
+    if (res.ok) {
+      const data = await res.json();
+      const textToSearch = [
+        data.AbstractText || '',
+        data.Heading || '',
+        ...(data.RelatedTopics || []).map((t: any) => t.Text || ''),
+      ].join(' ');
 
-    const data = await res.json();
-    const textToSearch = [
-      data.AbstractText || '',
-      data.Heading || '',
-      ...(data.RelatedTopics || []).map((t: any) => t.Text || ''),
-    ].join(' ');
+      const phoneRegex = /(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})/g;
+      const match = phoneRegex.exec(textToSearch);
 
-    const phoneRegex = /(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})/g;
-    const match = phoneRegex.exec(textToSearch);
+      if (match) {
+        const area = match[1];
+        const prefix = match[2];
+        const line = match[3];
 
-    if (match) {
-      const area = match[1];
-      const prefix = match[2];
-      const line = match[3];
-
-      if (!['800', '888', '877', '866', '855', '844', '833'].includes(area)) {
-        return {
-          found: true,
-          phoneNumber: `(${area}) ${prefix}-${line}`,
-          label: 'Municipal Police Line',
-          snippet: data.AbstractText ? `📍 ${data.AbstractText.slice(0, 140)}` : undefined,
-          queryUsed: query,
-          confidence: 'High',
-          source: 'DuckDuckGo Instant Answer API (Client-side)',
-        };
+        if (!['800', '888', '877', '866', '855', '844', '833'].includes(area)) {
+          return {
+            found: true,
+            phoneNumber: `(${area}) ${prefix}-${line}`,
+            label: 'Municipal Police Line',
+            snippet: data.AbstractText ? `📍 ${data.AbstractText.slice(0, 140)}` : undefined,
+            queryUsed: query,
+            confidence: 'High',
+            source: 'DuckDuckGo Instant Answer API (Client-side)',
+          };
+        }
       }
     }
-
-    return {
-      found: false,
-      queryUsed: query,
-      message: 'Direct client-side phone search links ready.',
-    };
   } catch (err) {
     console.warn("Client-side search fetch notice:", err);
-    return {
-      found: false,
-      queryUsed: query,
-      message: 'Direct client-side search ready.',
-    };
   }
+
+  return {
+    found: false,
+    queryUsed: query,
+    message: 'Direct client-side phone search links ready.',
+  };
 }
 
 export async function getCurrentGPSPosition(): Promise<{ lat: number; lng: number }> {
@@ -142,7 +157,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
     const searchQueryString = `${cityName || countyName || "local"} ${stateName} police non emergency phone number`;
     const queryTerm = encodeURIComponent(searchQueryString);
 
-    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString);
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName);
 
     return {
       latitude: lat,
@@ -188,20 +203,17 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       ? query
       : `${query} police non emergency phone number`;
 
-    const [nominatimRes, liveSearchResult] = await Promise.all([
-      fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-          query
-        )}&format=json&addressdetails=1&limit=1`,
-        {
-          headers: {
-            "Accept-Language": "en",
-            "User-Agent": "alt911.com/1.0",
-          },
-        }
-      ).then((r) => (r.ok ? r.json() : null)),
-      fetchClientSideSearchResults(searchQueryString),
-    ]);
+    const nominatimRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        query
+      )}&format=json&addressdetails=1&limit=1`,
+      {
+        headers: {
+          "Accept-Language": "en",
+          "User-Agent": "alt911.com/1.0",
+        },
+      }
+    ).then((r) => (r.ok ? r.json() : null));
 
     let lat = 0;
     let lng = 0;
@@ -227,6 +239,8 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
     const stateName = addr.state || "";
     const countryName = addr.country || "";
     const postcode = addr.postcode || "";
+
+    const liveSearchResult = await fetchClientSideSearchResults(searchQueryString, cityName, stateName);
 
     return {
       latitude: lat,
