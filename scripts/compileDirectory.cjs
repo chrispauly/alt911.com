@@ -111,19 +111,14 @@ async function scrapeCity(page, city, state) {
   const query = `${city}, ${state} police non emergency phone number`;
   console.log(`🔍 Searching: "${query}"...`);
 
-  // We search using DuckDuckGo HTML version to get fast, clean, simple markup
-  const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const searchUrl = `https://search.yahoo.com/search?q=${encodeURIComponent(query)}`;
   await page.goto(searchUrl);
 
-  // Wait for result elements
-  await page.waitForTimeout(1000);
+  // Wait for Yahoo results to render
+  await page.waitForTimeout(3000);
 
-  // Extract all text content from the search results page
-  const textContent = await page.evaluate(() => {
-    const snippets = Array.from(document.querySelectorAll('.result__snippet'));
-    const titles = Array.from(document.querySelectorAll('.result__a'));
-    return snippets.map((s, i) => `${titles[i] ? titles[i].textContent : ''} : ${s.textContent}`).join('\n\n');
-  });
+  // Extract all text content from the body of the search page
+  const textContent = await page.textContent('body') || '';
 
   const matches = [];
   let match;
