@@ -10,9 +10,15 @@ The goal of this service is to prevent misdialing 911 for non-life-threatening s
 
 ## 📸 Screenshots
 
-| Desktop View | Mobile View |
+### Desktop View (Light & Dark Modes)
+| Desktop — Light Mode | Desktop — Dark Mode |
 | :---: | :---: |
-| ![Desktop Preview](public/screenshots/desktop_preview.png) | ![Mobile Preview](public/screenshots/mobile_preview.png) |
+| ![Desktop Light Mode](public/screenshots/desktop_light.png) | ![Desktop Dark Mode](public/screenshots/desktop_dark.png) |
+
+### Mobile View (Light & Dark Modes)
+| Mobile — Light Mode | Mobile — Dark Mode |
+| :---: | :---: |
+| ![Mobile Light Mode](public/screenshots/mobile_light.png) | ![Mobile Dark Mode](public/screenshots/mobile_dark.png) |
 
 ---
 
