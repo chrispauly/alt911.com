@@ -34,8 +34,22 @@ export interface GeoLocationResult {
   isFallback: boolean;
 }
 
+function cleanAndNormalizeCity(city: string): string {
+  if (!city) return '';
+  let cleaned = city.split(',')[0].trim();
+  cleaned = cleaned.replace(/\b\d{5}(-\d{4})?\b/g, '');
+  cleaned = cleaned.replace(/(police|non-emergency|non emergency|dispatch|sheriff).*/gi, '');
+  cleaned = cleaned.trim();
+
+  return cleaned
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export async function fetchClientSideSearchResults(query: string, cityName?: string, stateName?: string, countyName?: string): Promise<LiveSearchResult | undefined> {
-  // Step 1: Check built-in Instant Police Directory (0ms latency!)
   const localMatch = lookupLocalPoliceDirectory(cityName, stateName, countyName);
   if (localMatch) {
     return {
@@ -52,7 +66,6 @@ export async function fetchClientSideSearchResults(query: string, cityName?: str
     };
   }
 
-  // Step 2: Query DuckDuckGo Instant Answer API directly from browser
   try {
     const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const res = await fetch(ddgUrl);
@@ -141,7 +154,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
     const data = await response.json();
     const addr = data.address || {};
 
-    const cityName =
+    const rawCityName =
       addr.city ||
       addr.town ||
       addr.village ||
@@ -149,6 +162,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<GeoLocat
       addr.municipality ||
       addr.county ||
       "";
+    const cityName = cleanAndNormalizeCity(rawCityName);
     const countyName = addr.county || "";
     const stateName = addr.state || "";
     const countryName = addr.country || "United States";
@@ -203,7 +217,6 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       ? query
       : `${query} police non emergency phone number`;
 
-    // Normalize US zip codes to search specifically in the US
     const isZipCode = /^\d{5}(-\d{4})?$/.test(query.trim());
     const geocodeQuery = isZipCode ? `${query.trim()} USA` : query;
 
@@ -232,13 +245,14 @@ export async function geocodeSearchText(query: string): Promise<GeoLocationResul
       displayName = first.display_name;
     }
 
-    const cityName =
+    const rawCityName =
       addr.city ||
       addr.town ||
       addr.village ||
       addr.suburb ||
       addr.municipality ||
       query;
+    const cityName = cleanAndNormalizeCity(rawCityName);
     const countyName = addr.county || "";
     const stateName = addr.state || "";
     const countryName = addr.country || "";

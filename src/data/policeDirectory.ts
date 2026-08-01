@@ -219,6 +219,17 @@ export const DIRECTORY_POLICE_NUMBERS: LocalPoliceInfo[] = [
     countyPhone: "(920) 849-2335",
     countyLabel: "Calumet County Sheriff Dispatch",
     countySnippet: "🕒 24/7 Non-Emergency Police Request for Officer & Dispatch Center",
+  },
+  {
+    city: "Columbus",
+    state: "IN",
+    county: "Bartholomew County",
+    policePhone: "(812) 376-2600",
+    policeLabel: "Columbus Police Department",
+    policeSnippet: "📍 123 Washington St, Columbus, IN 47201",
+    countyPhone: "(812) 379-1650",
+    countyLabel: "Bartholomew County Sheriff Dispatch",
+    countySnippet: "🕒 24/7 Non-Emergency Police Request for Officer & Dispatch Center",
   }
 ];
 
