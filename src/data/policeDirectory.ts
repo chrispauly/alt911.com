@@ -208,6 +208,17 @@ export const DIRECTORY_POLICE_NUMBERS: LocalPoliceInfo[] = [
     countyPhone: "(651) 266-9300",
     countyLabel: "Ramsey County Sheriff",
     countySnippet: "🕒 24/7 Non-Emergency Sheriff Line",
+  },
+  {
+    city: "Chilton",
+    state: "WI",
+    county: "Calumet County",
+    policePhone: "(920) 849-2222",
+    policeLabel: "Chilton Police Department",
+    policeSnippet: "📍 42 School St, Chilton, WI 53014",
+    countyPhone: "(920) 849-2335",
+    countyLabel: "Calumet County Sheriff Dispatch",
+    countySnippet: "🕒 24/7 Non-Emergency Police Request for Officer & Dispatch Center",
   }
 ];
 

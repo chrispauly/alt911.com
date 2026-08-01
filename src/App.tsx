@@ -207,8 +207,29 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      {/* Loading / Spinner State */}
+      {activeTab === 'finder' && (isLocating || isSearching) && (
+        <div className="result-card loading-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3.5rem 2rem', gap: '1rem', textAlign: 'center', minHeight: '300px' }}>
+          <div className="spinner-wrapper">
+            {isLocating ? (
+              <Compass size={48} className="spinning-icon pulse-icon" color="var(--accent-blue)" />
+            ) : (
+              <Search size={48} className="spinning-icon" color="var(--accent-blue)" />
+            )}
+          </div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.5rem' }}>
+            {isLocating ? "Resolving GPS Location..." : "Looking Up Dispatch Lines..."}
+          </h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', maxWidth: '360px', margin: '0 auto', lineHeight: '1.5' }}>
+            {isLocating 
+              ? "Accessing device GPS coordinates to resolve your city and county. Please click 'Allow' if prompted." 
+              : "Querying municipal databases and geocoding index tables for verified non-emergency lines."}
+          </p>
+        </div>
+      )}
+
       {/* TAB 1: LOCATION FINDER */}
-      {activeTab === 'finder' && locationResult && (
+      {activeTab === 'finder' && !isLocating && !isSearching && locationResult && (
         <div>
           <div className="result-card" ref={resultsRef} style={{ scrollMarginTop: '0.75rem' }}>
             <div className="location-header">
